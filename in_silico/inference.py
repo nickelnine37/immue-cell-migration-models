@@ -48,33 +48,62 @@ class BPbayesian:
 
         return alphas, betas
 
-    def L1(self, w, p, b):
+    def log_likelihood_slow(self, w: float, p: float, b: float) -> float:
         """
-        Get the likelihood of
+        Get the log-likelihood of a set of parameters w, p, b. This was the first version of the method. It was
+        very slow as it looped through each step of the walk.
+
+        Params:
+
+            w:    The variable w which defines the probability of taking a biased step
+            p:    The variable p, defining the variance of persistent motion
+            b:    The variable b, defining the variance of boased motion
+
+        Returns:
+
+            alphas:    np.array - (T, N): angle taken at each time step
+            betas:     np.array - (T, N): direction to source at each time step
+
         """
 
         sig_b = -2 * np.log(b)
         sig_p = -2 * np.log(p)
-        ps = 0
+        log_prob = 0
 
         for walker in range(self.alphas.shape[1]):
 
             alphas = self.alphas[:, walker]
             betas = self.betas[:, walker]
 
-            ps += np.log(wrapped_normal_pdf(alphas[0], betas[0], sig_b))
+            log_prob += np.log(wrapped_normal_pdf(alphas[0], betas[0], sig_b))
 
             for alpha, beta, alpha_prev in zip(alphas[1:], betas[1:], alphas[:-1]):
                 p_t = w * wrapped_normal_pdf(alpha, beta, sig_b) + (1 - w) * wrapped_normal_pdf(alpha, alpha_prev, sig_p)
-                ps += np.log(p_t)
+                log_prob += np.log(p_t)
 
-        return ps
+        return log_prob
 
-    def L2(self, w, p, b):
+    def log_likelihood(self, w, p, b):
+        """
+        Get the log-likelihood of a set of parameters w, p, b. This is a vectorised version which
+        is considerably faster.
+
+        Params:
+
+            w:    The variable w which defines the probability of taking a biased step
+            p:    The variable p, defining the variance of persistent motion
+            b:    The variable b, defining the variance of boased motion
+
+        Returns:
+
+            alphas:    np.array - (T, N): angle taken at each time step
+            betas:     np.array - (T, N): direction to source at each time step
+
+        """
 
         sig_b = -2 * np.log(b)
         sig_p = -2 * np.log(p)
-        ps = 0
+        log_prob = 0
 
         for walker in range(self.alphas.shape[1]):
 
@@ -85,10 +114,10 @@ class BPbayesian:
             p_0 = wrapped_normal_pdf2(self.alphas[0, walker], self.betas[0, walker], sig_b)
             p_t = w * wrapped_normal_pdf2(alphas, betas, sig_b) + (1 - w) * wrapped_normal_pdf2(alphas, alpha_prevs, sig_p)
 
-            ps += np.log(p_0)
-            ps += np.log(p_t).sum()
+            log_prob += np.log(p_0)
+            log_prob += np.log(p_t).sum()
 
-        return ps
+        return log_prob
 
     def infer(self, w0, p0, b0,
               step=0.02,
@@ -97,20 +126,21 @@ class BPbayesian:
 
         params = []
         w, p, b = w0, p0, b0
-        L0 = self.L2(w, p, b)
+        L0 = self.log_likelihood(w, p, b)
 
         for i in range(n_steps):
 
+            # add random purturbation to w, p, b
             dw = np.random.uniform(-step, step)
             dp = np.random.uniform(-step, step)
             db = np.random.uniform(-step, step)
-
             w_, p_, b_ = w + dw, p + dp, b + db
 
+            # Here, were essentially putting a uniform prior over w, p, b
             if any([a_ > 1 or a_ < 0 for a_ in [w_, b_, p_]]):
                 continue
 
-            L_p = self.L2(w_, p_, b_)
+            L_p = self.log_likelihood(w_, p_, b_)
             prob = np.exp(L_p - L0)
 
             if np.random.uniform(0, 1) < prob:
