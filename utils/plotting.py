@@ -1,7 +1,6 @@
 import numpy as np
 from fractions import Fraction
 
-
 def latex(fraction: Fraction) -> str:
     """
     Convert a fraction.Fraction, in multiples of pi, to a nice
@@ -50,7 +49,3 @@ def add_pi_ticks(ax, between=(-np.pi, np.pi), step=np.pi / 4, axis='x'):
         ax.set_xticklabels(labels)
         ax.set_yticks(ticks)
         ax.set_yticklabels(labels)
-
-
-if __name__ == '__main__':
-    pass
