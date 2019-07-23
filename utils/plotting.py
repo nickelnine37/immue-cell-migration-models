@@ -5,6 +5,8 @@ from scipy.stats import gaussian_kde
 from subprocess import check_output
 import os
 import time
+from in_silico.sources import Source
+from tqdm import tqdm
 
 def make_gif(array: np.ndarray, save_as: str, delay: int=10,
              time_first: bool=True, v_bounds: tuple=(None, None),
@@ -54,13 +56,8 @@ def make_gif(array: np.ndarray, save_as: str, delay: int=10,
     path_to_png = path_to_gif + 'tmp/'
 
     T0 = time.time()
-    print('Plotting images')
 
-    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-    if paths is not None:
-        paths = [(t0, colors[i%len(colors)], path) for i, (t0, path) in enumerate(paths)]
-
-    for t in range(T):
+    for t in tqdm(range(T), desc='Plotting images'):
         # sort name stuff
         name = bin(t)[2:]
         name = '0' * (bits - len(name)) + name
@@ -81,19 +78,20 @@ def make_gif(array: np.ndarray, save_as: str, delay: int=10,
                 ax.add_patch(c)
 
         if paths is not None:
-            for t0, color, path in paths:
-                n_points = path.shape[0]
-                if n_points > 1:
-                    if t0 < t:
-                        to = min(n_points, t - t0 + 1)
-                        plt.plot(path[:to, 0], path[:to, 1], color=color, linewidth=1, alpha=0.75)
+            colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+            i = 0
+            for path in paths:
+                if path.shape[0] > 1:
+                    path_to_plot = path[path[:, 0] < t]
+                    plt.plot(path_to_plot[:, 1], path_to_plot[:, 2], color=colors[i % len(colors)], linewidth=1, alpha=0.75)
+                    i += 1
             # plt.show()
 
         # save each png file
         plt.savefig(path_to_png + '{}.png'.format(name), dpi=dpi)
         plt.close()
 
-    print('Plotted images in {:.2f}s'.format(time.time() - T0))
+    time.sleep(0.1)
     print('Creating gif')
 
     # convert pngs to gif
@@ -203,3 +201,85 @@ def plot_wpb_dist(params: np.array,
             plt.savefig(save_as + '.pdf')
 
     plt.show()
+
+
+
+def set_source():
+
+    import skimage
+    from matplotlib.patches import Circle
+
+    path = r'/media/ed/DATA/Datasets/Leukocytes/Control wounded 1hr/'
+    tif_file = path + r'Pupae 1 concatenated ubi-ecad-GFP, srpGFP; srp-3xH2Amch x white-1HR.tif'
+    frames = skimage.io.imread(tif_file)[:, 0, :, :]
+
+    fig, ax = plt.subplots()
+
+    T, by, bx = frames.shape
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_xlim([0, bx])
+    ax.set_ylim([0, by])
+
+    class SourceSetter:
+
+        def __init__(self, fig, ax):
+            self.fig, self.ax = fig, ax
+
+            self.circ = Circle((None, None), 30, fill=False, linewidth=1, color='red')
+            self.ax.add_artist(self.circ)
+            self.fig.canvas.mpl_connect('button_press_event', self.on_click)
+
+        def on_click(self, event):
+            if event.inaxes is None:
+                return
+            self.circ.center = event.xdata, event.ydata
+            self.fig.canvas.draw()
+            print(event.xdata, event.ydata)
+
+    ax.imshow(frames[0, :, :])
+    t = 1
+
+    ss = SourceSetter(fig, ax)
+    while True:
+        ax.imshow(frames[t % T, :, :], origin='lower')
+        plt.pause(0.2)
+        del ax.images[0]
+        t += 1
+
+    # plt.show()
+
+def plot_paths(paths: np.ndarray, source: Source):
+
+    source_x, source_y = source.position
+    T, _, N = paths.shape
+
+    fig, ax = plt.subplots()
+
+    max_x, min_x = paths[:, 0, :].max(), paths[:, 0, :].min()
+    max_y, min_y = paths[:, 1, :].max(), paths[:, 1, :].min()
+    x_diff = max_x - min_x
+    y_diff = max_y - min_y
+    max_x += 0.05 * x_diff
+    min_x -= 0.05 * x_diff
+    max_y += 0.05 * y_diff
+    min_y -= 0.05 * y_diff
+
+    step = (max_x - min_x) / 500
+
+    x_space = np.arange(min_x, max_x, step)
+    y_space = np.arange(min_y, max_y, step)
+    X, Y = np.meshgrid(x_space, y_space)
+    Rs = (X - source_x) ** 2 + (Y - source_y) ** 2
+    Z = np.exp(- Rs)
+
+    plt.imshow(Z, extent=[min_x, max_x, min_y, max_y], origin='lower')
+    ax.set_aspect('equal')
+
+    for n in range(N):
+        plt.plot(paths[:, 0, n], paths[:, 1, n], linewidth=0.5)
+
+
+    plt.show()
+
+

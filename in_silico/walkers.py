@@ -2,6 +2,7 @@ import numpy as np
 from in_silico.sources import Source
 from utils.distributions import Bernoulli, WrappedNormal, TruncatedNormal
 from utils.angles import angle_between
+from utils.exceptions import ArgumentError
 
 # use negative y-axis as the reference axis
 reference_axis = np.array([0, -1])
@@ -14,7 +15,7 @@ class Leukocyte:
     def walk(self, X0: np.array, T: int):
         raise NotImplementedError
 
-    def multi_walk(self, X0s: list, T:int):
+    def multi_walk(self, X0s: np.ndarray, T:int):
         """
         For a list of initial coordinates, X0, perform len(X0) walks for T steps
         and concatenate the results
@@ -29,13 +30,10 @@ class Leukocyte:
         return np.concatenate([self.walk(X0, T)[:, :, None] for X0 in X0s], axis=2)
 
 
-
 class BP_Leukocyte(Leukocyte):
 
     def __init__(self,
-                 w: float,
-                 p: float,
-                 b: float,
+                 params: np.ndarray,
                  source: Source,
                  s: float=0.2) -> None:
         """
@@ -53,55 +51,64 @@ class BP_Leukocyte(Leukocyte):
 
         super().__init__()
 
+        w, p, b = params
+
         self.w = w
-        self.p = p
-        self.b = b
+
+        if any([p < 0, p > 1, b < 0, b > 1, w < 0, w > 1]):
+            raise ArgumentError('The values for p, b and w must be between 0 and 1, but they are p={}, b={}, w={}'.format(p, b, w))
+
+        self.p = p if p != 0 else 0.01
+        self.b = b if b != 0 else 0.01
         self.source = source
         self.s = s
-        self.step = TruncatedNormal(mu=0, sig=self.s)
+        self.step = TruncatedNormal(sig=self.s)
 
-    def walk(self, X0: np.array, T: int) -> np.array:
-        """
-        Perform a biased-persistent random walk from starting point X0, for T time steps
+    def walk(self, X0s: np.ndarray, T: int):
 
-        Params:
+        N = X0s.shape[0]
+        path = np.zeros((T + 1, 2, N))
 
-            X0:       The starting coordinates for the leukocyte
-            T:        The number of steps to move through
+        path[0, :, :] = X0s.T
 
-        Returns:
+        bias_decisions = Bernoulli(mu=self.w).sample(size=(T, N))  # pre-compute all the b/p decisions in vector form
+        bias_decisions[0, :] = True
+        sigmas = np.zeros((T, N))
+        sigmas[bias_decisions] = self.b
+        sigmas[~bias_decisions] = self.p
+        sigmas = - 2 * np.log(sigmas)
+        sigmas[np.isinf(sigmas)] = 100
+        steps = self.step.sample(size=T)
 
-            np.array (T+1, 2): the x-y coordinates of the path traversed beginning at X0
+        for t in range(T):
 
-        """
+            biased = bias_decisions[t, :]
+            dir_to_source = self.source.direction_to_source(path[t, :, :].T)
+            mu = angle_between(reference_axis, dir_to_source.T)
 
-        path = np.zeros((T + 1, 2))
-        path[0, :] = X0
-        biased = Bernoulli(mu=self.w).sample(size=T)  # pre-compute all the b/p decisions in vector form
+            if t > 0:
+                mu[~biased] = previous_angles[~biased]
 
-        for i, bias in enumerate(biased):
-
-            if bias or i == 0:
-                sig = -2 * np.log(self.b)
-                dir_to_source = self.source.direction_to_source(path[i])
-                mu = angle_between(reference_axis, dir_to_source)
-
-            else:
-                sig = -2 * np.log(self.p)
-                mu = previous_angle
-
-            if np.isinf(sig):
-                sig = 100
-
-            alpha = WrappedNormal(mu=mu, sig=sig).sample()
-            previous_angle = alpha
-            s_t = self.step.sample()
-            dx = s_t * np.sin(alpha)
-            dy = s_t * np.cos(alpha)
-            path[i + 1, 0] = path[i, 0] + dx
-            path[i + 1, 1] = path[i, 1] - dy
+            alpha = WrappedNormal(mu=mu, sig=sigmas[t, :]).sample(N)
+            previous_angles = alpha
+            path[t + 1, :, :] = path[t, :, :] + steps[t] * np.array([np.sin(alpha), -np.cos(alpha)])
 
         return path
 
 
+if __name__ == '__main__':
 
+    import time
+    import matplotlib.pyplot as plt
+    from in_silico.sources import PointSource
+
+    N = 20
+    B = BP_Leukocyte(np.array([0.5, 0.8, 0.8]), PointSource(np.array([3, 3])))
+
+    t0 = time.time()
+    paths = B.walk(X0s=np.random.uniform(-5, 5, size=(N, 2)), T=100)
+    t2 = time.time()
+
+    from plotting import plot_paths
+
+    plot_paths(paths, PointSource(np.array([3, 3])))
