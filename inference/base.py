@@ -15,29 +15,55 @@ class MCMC:
     def log_prior(self, params: np.ndarray) -> float:
         raise NotImplementedError
 
-    def infer(self, init_params: np.ndarray, n_steps: int, burn_in: int,
-              seed: int=0, suppress_warnings: bool=False, use_tqdm: bool=True) -> np.ndarray:
+    def infer(self, n_steps: int, burn_in: int, seed: int=0,
+              suppress_warnings: bool=False, use_tqdm: bool=True) -> np.ndarray:
+        """
+        Perform one session of MCMC inference on biased-persistent parameters.
+        The starting point is sampled from the priors.
+
+        Parameters
+        ----------
+        n_steps             The number of steps, after burn_in to perform
+        burn_in             The number of burn in steps
+        seed                A random seed - useful for multiprocessing
+        suppress_warnings   Whether to suppress warnings about failure rates
+        use_tqdm            Whether to use a tqdm progress bar
+
+        Returns
+        -------
+
+        params_out          A (n_steps, n_dimensions) array giving all the sampled posterior values
+
+        """
 
         np.random.seed(seed)
 
+        # sample the initial parameters from the priors
+        init_params = np.array([prior.sample() for prior in self.priors])
+
+        # get the initial log likelihood and log prior values
+        L0 = self.log_likelihood(init_params) + self.log_prior(init_params)
+
+        # calculate some values for the inference
         n = n_steps + burn_in
         check_every = n_steps // 100
-
-        L0 = self.log_likelihood(init_params) + self.log_prior(init_params)
         params = np.array(init_params)
         n_params = len(params)
         params_out = np.zeros((n, n_params))
 
+        # initialise the step size to be 1/20 of the std of the priors
         step = [prior.std() / 20 for prior in self.priors]
         total_accepts = 0
         rolling_accepts = 0
         rolling_rejects = 0
 
+        # set up a tqdm progress bar
         if use_tqdm:
             pbar = tqdm(range(n))
         else:
             pbar = range(n)
 
+        # iterate through the inference steps
         for i in pbar:
 
             # add random purturbation to w, p, b
@@ -59,6 +85,7 @@ class MCMC:
             else:
                 rolling_rejects += 1
 
+            # count rolling rejects and warn if necessary
             if rolling_rejects == 100:
                 if not suppress_warnings:
                     print(' WARNING: 100 simultaneous rejections')
@@ -67,7 +94,7 @@ class MCMC:
             # append the params regardless of whether the step was accepted or not
             params_out[i, :] = params
 
-            # adapt the guassian kernel width to be half the standard deviation of previous steps
+            # adapt the guassian kernel width to be 1/3 the standard deviation of previous steps
             if i % check_every == check_every - 1:
                 step = np.array(params_out)[:i, ].std(0) / 3
                 if use_tqdm:
@@ -77,16 +104,35 @@ class MCMC:
 
         return np.array(params_out)[burn_in:, :]
 
-    def multi_infer(self, init_params: np.ndarray, n_steps: int, burn_in: int,
-                    seed: int=0, suppress_warnings: bool=False, use_tqdm: bool=True) -> np.ndarray:
+    def multi_infer(self, n_walkers: int, n_steps: int, burn_in: int, seed: int=0,
+                    suppress_warnings: bool=False, use_tqdm: bool=True) -> np.ndarray:
+        """
+        Perform inference with n_walkers starting points, in parallel
+
+        Parameters
+        ----------
+        n_walkers           The number of parallel processes to run
+        n_steps             The number of steps, after burn_in to perform
+        burn_in             The number of burn in steps
+        seed                A random seed - useful for multiprocessing
+        suppress_warnings   Whether to suppress warnings about failure rates
+        use_tqdm            Whether to use a tqdm progress bar
+
+        Returns
+        -------
+        params_out          A (n_steps, n_dimensions) array giving all the sampled posterior values
+
+        """
 
         np.random.seed(seed)
-        n_walkers = init_params.shape[0]
-        n_params = init_params.shape[1]
         objs = [self for _ in range(n_walkers)]
         methods = ['infer' for _ in range(n_walkers)]
 
-        params = [{'init_params': init_params[i, :], 'n_steps': n_steps, 'burn_in': burn_in, 'seed': i + seed, 'use_tqdm': use_tqdm, 'suppress_warnings': suppress_warnings} for i in range(n_walkers)]
+        params = [{'n_steps': n_steps,
+                   'burn_in': burn_in,
+                   'seed': i + seed,
+                   'use_tqdm': use_tqdm,
+                   'suppress_warnings': suppress_warnings} for i in range(n_walkers)]
 
         t0 = time.time()
         print('Beginning MCMC walk in parallel')
@@ -96,4 +142,4 @@ class MCMC:
             return np.concatenate(res, axis=0)
         except ValueError:
             print('Warning: one or more of the parallel MCMC walkers failed')
-            return np.concatenate([r for r in res if r.shape == (n_steps, n_params)], axis=0)
+            return np.concatenate([r for r in res if r.shape == (n_steps, len(self.priors))], axis=0)

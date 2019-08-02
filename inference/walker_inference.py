@@ -63,7 +63,7 @@ def prepare_paths(paths: list, min_t: int=5) -> np.ndarray:
     return paths_array
 
 
-def get_alphas_betas(paths: np.ndarray, source: Source):
+def get_alphas_betas(paths_matrix: np.ndarray, source: Source):
     """
     Given a set of raw x-y coordinates, get a list of the alphas and betas
 
@@ -78,20 +78,20 @@ def get_alphas_betas(paths: np.ndarray, source: Source):
 
     """
 
-    T, _, N = paths.shape
+    T, _, N = paths_matrix.shape
 
     if T <= 1 or N == 0:
         return np.array([]).reshape(0, 0), np.array([]).reshape(0, 0)
 
-    moves = paths[1:, :, :] - paths[:-1, :, :]
+    moves = paths_matrix[1:, :, :] - paths_matrix[:-1, :, :]
     alphas = np.apply_along_axis(lambda move: angle_between(reference_axis, move), 1, moves)
-    directions_to_source = np.apply_along_axis(source.direction_to_source, 1, paths)
+    directions_to_source = np.apply_along_axis(source.direction_to_source, 1, paths_matrix)
     betas = np.apply_along_axis(lambda d: angle_between(reference_axis, d), 1, directions_to_source)[:-1, :]
 
     return alphas, betas
 
 
-class BiasedPersistentInfernce(MCMC):
+class BiasedPersistentInferer(MCMC):
 
     def __init__(self, paths: list, sources: list, priors: list=None):
         """

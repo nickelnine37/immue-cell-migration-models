@@ -65,19 +65,13 @@ def set_source(frames):
     return ss.run()
 
 
-
-
-
-
-
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Set the source position')
     parser.add_argument('tif_file', type=str, nargs=1, help='load a tif file')
-    parser.add_argument('color_channel', type=int, nargs=1, help='load a tif file', default=0)
+    parser.add_argument('color_channel', type=int, nargs=1, help='load a tif file', default=1)
 
     args = parser.parse_args()
 
     frames = skimage.io.imread(args.tif_file[0])[:, args.color_channel[0], :, :]
     set_source(frames)
+

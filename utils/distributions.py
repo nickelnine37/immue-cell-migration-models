@@ -2,8 +2,16 @@ import numpy as np
 from typing import Union
 import matplotlib.pyplot as plt
 from scipy.stats import norm, lognorm, expon, truncnorm, uniform
-
+from matplotlib.widgets import Slider, Button
 import scipy
+import time
+
+import sys
+import os
+
+sys.path.append(os.path.split(sys.path[0])[0])
+
+from utils.plotting import add_pi_ticks
 
 """
 This file contains a variety of distribution classes. They are based roughly
@@ -48,7 +56,6 @@ class ScipyDistribution(scipy.stats._distn_infrastructure.rv_frozen):
         super().__init__(dist_type, *args, **kwargs)
 
         self.valid_prior = True
-
 
     def sample(self, size: Union[tuple, float]=None):
         return self.rvs(size)
@@ -184,6 +191,12 @@ class WrappedNormal:
     def get_xlims(self):
         return -np.pi, np.pi
 
+    def get_mean_lims(self):
+        return -np.pi, np.pi
+
+    def get_sig_lims(self):
+        return 0.01, 6
+
 
 class TruncatedNormal(ScipyDistribution):
 
@@ -227,19 +240,6 @@ class Uniform(ScipyDistribution):
 
 
 
-if __name__ == '__main__':
-
-    # x = np.linspace(-2, 5, 1001)
-    dist = TruncatedNormal(sig=3)
-    # plt.figure()
-    # plt.plot(x, dist.pdf(x))
-    # plt.show()
-    # print(dist.sample((100, 4)))
-    # print(dist.mean())
-    print(dist.pdf(dist.ppf(1 - 0.99)))
-
-
-
 # import numpy as np
 # from typing import Union
 # import matplotlib.pyplot as plt
@@ -247,6 +247,61 @@ if __name__ == '__main__':
 # import re
 # from scipy.stats import norm
 #
+
+# def set_params(distribution, pi_ticks=False):
+#
+#     fig = plt.figure()
+#     ax = fig.add_subplot(111)
+#
+#     if pi_ticks:
+#         add_pi_ticks(ax)
+#
+#     # Adjust the subplots region to leave some space for the sliders and buttons
+#     fig.subplots_adjust(bottom=0.25)
+#     a, b = distribution.get_xlims()
+#     ax.set_xlim(a, b)
+#
+#     distribution.x = np.linspace(a, b, 1001)
+#     distribution.y = distribution.pdf(distribution.x)
+#     [line] = ax.plot(distribution.x, distribution.y)
+#
+#     mu1, mu2 = distribution.get_mean_lims()
+#     sig1, sig2 = distribution.get_sig_lims()
+#
+#
+#     slider_ax1 = fig.add_axes([0.15, 0.1, 0.65, 0.03])
+#     slider_ax2 = fig.add_axes([0.15, 0.15, 0.65, 0.03])
+#     slider1 = Slider(slider_ax1, r'$\mu$', mu1, mu2, valinit=distribution.mu)
+#     slider2 = Slider(slider_ax2, r'$\sigma$', sig1, sig2, valinit=distribution.sig)
+#
+#     def update_y():
+#         distribution.y = distribution.pdf(distribution.x)
+#         line.set_ydata(distribution.y)
+#         fig.canvas.draw_idle()
+#
+#     def slider1_on_changed(val):
+#         distribution.mu = slider1.val
+#         update_y()
+#
+#     def slider2_on_changed(val):
+#         distribution.sig = slider2.val
+#         update_y()
+#
+#     def reset_axis(mouse_event):
+#
+#         max_y = distribution.y.max()
+#         min_y = distribution.y.min()
+#         diff = max_y - min_y
+#         ax.set_ylim(min_y - 0.1 * diff, max_y + 0.1 * diff)
+#         fig.canvas.draw_idle()
+#
+#     slider1.on_changed(slider1_on_changed)
+#     slider2.on_changed(slider2_on_changed)
+#     reset_button_ax = fig.add_axes([0.4, 0.025, 0.15, 0.04])
+#     reset_axis_button = Button(reset_button_ax, 'Rescale axis', hovercolor='0.975')
+#     reset_axis_button.on_clicked(reset_axis)
+#
+#     plt.show()
 # class Distribution:
 #
 #     def __init__(self,
