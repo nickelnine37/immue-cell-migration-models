@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.special import expi
 from typing import Union, Iterable
+from numbers import Number
 
 class Source:
 
@@ -85,7 +86,7 @@ class MultiPointWound(Wound):
         self.n_cells = n_cells
         self.radius = radius
 
-    def concentration(self, params: np.ndarray, r: Union[np.ndarray, float], t: Union[np.ndarray, float]):
+    def concentration(self, params: np.ndarray, r: Union[np.ndarray, Number], t: Union[np.ndarray, Number]):
         """
         Return the concentration of attractant at a distance r from the wound centre at time t.
         Note that, since a wound with multiple cells inside will not emmit attractant in a
@@ -117,50 +118,55 @@ class MultiPointWound(Wound):
 
         """
 
+        # we want a total flow rate of q, so we divide by the number of cells
+        scaled_params = params.copy()
+        scaled_params[0] = params[0] / self.n_cells
+
         # we want the concentration at a single point r and single time t
-        if isinstance(r, (float, int)) and isinstance(t, (float, int)):
-            return concentration(params, (self.x ** 2 + (r - self.y) ** 2) ** 0.5, t).sum()
+        if isinstance(r, Number) and isinstance(t, Number):
+            return concentration(scaled_params, (self.x ** 2 + (r - self.y) ** 2) ** 0.5, t).sum()
 
         # we want the concentration at a sequence of points r and a single time t
-        elif isinstance(r, np.ndarray) and isinstance(t, (float, int)):
-            rs = np.concatenate([np.expand_dims((self.x[i] ** 2 + (r - self.y[i]) ** 2), axis=-1) for i in range(self.n_cells)], axis=-1)
-            return concentration(params, rs, t).sum(-1)
+        elif isinstance(r, np.ndarray) and isinstance(t, Number):
+
+            rs = np.concatenate([np.expand_dims((self.x[i] ** 2 + (r - self.y[i]) ** 2) ** 0.5, axis=-1) for i in range(self.n_cells)], axis=-1)
+            return concentration(scaled_params, rs, t).sum(-1)
 
         # we want the concentration at a sequence of points r and sequence of times t
         elif isinstance(r, np.ndarray) and isinstance(t, np.ndarray):
 
             # assume we want C = [C(r1, t1), C(r2, t2) ... ]
             if r.shape == t.shape:
-                rs = np.concatenate([np.expand_dims((self.x[i] ** 2 + (r - self.y[i]) ** 2), axis=-1) for i in range(self.n_cells)], axis=-1)
+                rs = np.concatenate([np.expand_dims((self.x[i] ** 2 + (r - self.y[i]) ** 2) ** 0.5, axis=-1) for i in range(self.n_cells)], axis=-1)
                 ts = np.concatenate([np.expand_dims(t, axis=-1) for _ in range(self.n_cells)], axis=-1)
-                return concentration(params, rs, ts).sum(-1)
+                return concentration(scaled_params, rs, ts).sum(-1)
 
             # assume we want all points r at all times t
             else:
                 # this checks if t is 1D
                 if sum(t.shape) - t.ndim + 1 == len(t.reshape(-1)):
                     t = t.reshape(-1)
-                    rs = np.concatenate([np.expand_dims((self.x[i] ** 2 + (r - self.y[i]) ** 2), axis=-1) for i in range(self.n_cells)], axis=-1)
+                    rs = np.concatenate([np.expand_dims((self.x[i] ** 2 + (r - self.y[i]) ** 2) ** 0.5, axis=-1) for i in range(self.n_cells)], axis=-1)
                     ts = np.concatenate([np.expand_dims(ti * np.ones_like(rs), axis=-1) for ti in t], axis=-1)
                     rs = np.concatenate([np.expand_dims(rs, axis=-1) for _ in range(len(t))], axis=-1)
-                    return concentration(params, rs, ts).sum(-2)
+                    return concentration(scaled_params, rs, ts).sum(-2)
                 else:
                     raise ValueError('If you want concentration at all points r at all times t, t must be 1D')
 
         # we want the concentration at a single point r at a sequence of times t
-        elif isinstance(r, (float, int)) and isinstance(t, np.ndarray):
+        elif isinstance(r, Number) and isinstance(t, np.ndarray):
 
             # this checks is t is 1D
             if sum(t.shape) - t.ndim + 1 == len(t.reshape(-1)):
                 ts = t.reshape(1, -1)
                 rs = np.concatenate([(self.x ** 2 + (r - self.y) ** 2) ** 0.5 for _ in range(ts.shape[1])], axis=1)
                 ts = np.concatenate([ts for _ in range(self.x.shape[0])], axis=0)
-                return concentration(params, rs, ts).sum(0).reshape(t.shape)
+                return concentration(scaled_params, rs, ts).sum(0).reshape(t.shape)
             else:
                 raise ValueError('If you want concentration at point r at all times t, t must be 1D')
 
         else:
-            raise ValueError('r and t must be numbers or numpy arrays')
+            raise ValueError('r and t must be numbers or numpy arrays, but they are {} and {} respectively'.format(type(r), type(t)))
 
     def concentration_xy(self, params, x, y, t):
         """
@@ -191,6 +197,10 @@ class MultiPointWound(Wound):
 
         """
 
+        # we want a total flow rate of q, so we divide by the number of cells
+        scaled_params = params.copy()
+        scaled_params[0] = params[0] / self.n_cells
+
         # x and y must be the same type
         if type(x) != type(y):
             raise ValueError(
@@ -199,20 +209,17 @@ class MultiPointWound(Wound):
         # we want the concentration at a single point xy at a single time t
         if isinstance(x, (float, int)) and isinstance(t, (float, int)):
             rs = ((x - self.x) ** 2 + (y - self.y ** 2)) ** 0.5
-            return concentration(params, rs, t).sum()
+            return concentration(scaled_params, rs, t).sum()
 
         # we want the concentration at a sequence of points xy at a single time t
         if isinstance(x, np.ndarray) and isinstance(t, (float, int)):
 
             # x and y must have the same shape
             if x.shape != y.shape:
-                raise ValueError(
-                    'x and y must be the same shape, but they are {} and {} respectively'.format(x.shape, y.shape))
+                raise ValueError('x and y must be the same shape, but they are {} and {} respectively'.format(x.shape, y.shape))
 
-            rs = np.concatenate(
-                [np.expand_dims(((x - self.x[i]) ** 2 + (y - self.y[i]) ** 2), axis=-1) for i in range(self.n_cells)],
-                axis=-1)
-            return concentration(params, rs, t).sum(-1)
+            rs = np.concatenate([np.expand_dims(((x - self.x[i]) ** 2 + (y - self.y[i]) ** 2) ** 0.5, axis=-1) for i in range(self.n_cells)],axis=-1)
+            return concentration(scaled_params, rs, t).sum(-1)
 
         elif isinstance(x, np.ndarray) and isinstance(t, np.ndarray):
 
@@ -223,21 +230,19 @@ class MultiPointWound(Wound):
 
             # assume we want C = [C(r1, t1), C(r2, t2) ... ]
             if x.shape == t.shape:
-                rs = np.concatenate([np.expand_dims(((x - self.x[i]) ** 2 + (y - self.y[i]) ** 2), axis=-1) for i in
-                                     range(self.n_cells)], axis=-1)
+                rs = np.concatenate([np.expand_dims(((x - self.x[i]) ** 2 + (y - self.y[i]) ** 2) ** 0.5, axis=-1) for i in range(self.n_cells)], axis=-1)
                 ts = np.concatenate([np.expand_dims(t, axis=-1) for _ in range(self.n_cells)], axis=-1)
-                return concentration(params, rs, ts).sum(-1)
+                return concentration(scaled_params, rs, ts).sum(-1)
 
             # assume we want all points r at all times t
             else:
                 # this checks if t is 1D
                 if sum(t.shape) - t.ndim + 1 == len(t.reshape(-1)):
                     t = t.reshape(-1)
-                    rs = np.concatenate([np.expand_dims(((x - self.x[i]) ** 2 + (y - self.y[i]) ** 2), axis=-1) for i in
-                                         range(self.n_cells)], axis=-1)
+                    rs = np.concatenate([np.expand_dims(((x - self.x[i]) ** 2 + (y - self.y[i]) ** 2) ** 0.5, axis=-1) for i in range(self.n_cells)], axis=-1)
                     ts = np.concatenate([np.expand_dims(ti * np.ones_like(rs), axis=-1) for ti in t], axis=-1)
                     rs = np.concatenate([np.expand_dims(rs, axis=-1) for _ in range(len(t))], axis=-1)
-                    return concentration(params, rs, ts).sum(-2)
+                    return concentration(scaled_params, rs, ts).sum(-2)
                 else:
                     raise ValueError('If you want concentration at all points r at all times t, t must be 1D')
 
@@ -247,10 +252,9 @@ class MultiPointWound(Wound):
             # this checks is t is 1D
             if sum(t.shape) - t.ndim + 1 == len(t.reshape(-1)):
                 ts = t.reshape(1, -1)
-                rs = np.concatenate([((x - self.x ** 2) + (y - self.y) ** 2) ** 0.5 for _ in range(ts.shape[1])],
-                                    axis=1)
+                rs = np.concatenate([((x - self.x ** 2) + (y - self.y) ** 2) ** 0.5 for _ in range(ts.shape[1])], axis=1)
                 ts = np.concatenate([ts for _ in range(self.x.shape[0])], axis=0)
-                return concentration(params, rs, ts).sum(0).reshape(t.shape)
+                return concentration(scaled_params, rs, ts).sum(0).reshape(t.shape)
 
             else:
 
@@ -336,14 +340,14 @@ def concentration(params: np.ndarray, r: Union[np.ndarray, float], t: Union[np.a
 
     q, D, tau = params[:3]
 
-    if isinstance(r, (float, int, np.ndarray)) and isinstance(t, (float, int)):
+    if isinstance(r, (Number, np.ndarray)) and isinstance(t, Number):
 
         if t < tau:
             return - (q / (4 * np.pi * D)) * expi(- r ** 2 / (4 * D * t))
         else:
             return (q / (4 * np.pi * D)) * (expi(- r ** 2 / (4 * D * (t - tau))) - expi(- r ** 2 / (4 * D * t)))
 
-    elif isinstance(r, (float, int, np.ndarray)) and isinstance(t, np.ndarray):
+    elif isinstance(r, (Number, np.ndarray)) and isinstance(t, np.ndarray):
 
         assert r.shape == t.shape, 'r and t must be the same shape, but they have shapes {} and {} respectively'.format(
             r.shape, t.shape)
