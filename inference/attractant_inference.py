@@ -68,27 +68,80 @@ def observed_bias(params: np.ndarray, r: Union[np.ndarray, float], t: Union[np.a
 
 class AttractantInference(MCMC):
 
-    def __init__(self, ob_readings: np.ndarray, ts_bins: list, wound: Wound):
+    def __init__(self, ob_readings: dict, wound: Wound, priors: list=None, t_units='minutes'):
+        """
+        Perform inference on observed bias readings to infer the posterior distribution over the
+        attractant dynamics parameters {q, D, τ, R0, kappa, m, b0}.
+
+        A dictionary specifying the observed bias readings must be provided, along with a certain
+        instantiated wound (which can be a PointWound, a CellsOnWoundMargin or CellsInsideWound) .
+
+        The observed bias readings should be a dictionary with elements of the following form:
+
+        {(r1, t1): (mu1, sig1), (r2, t2): (mu2, sig2) ... }
+
+        r and t specify the spatial and temporal location where the observed bias has been measured,
+        and mu and sig represent the mean and standard deviation of the posterior of the observed
+        bias at this location.
+
+        DISTANCES SHOULD BE MEASURED IN MICRONS
+
+        time can be measured in minutes or seconds: specify this with the t_units argument.
+
+        The parameters are measured in the following units:
+
+        q:      Mmol / min
+        D:      µm^2 / min
+        τ:      min
+        R0:     Mmol / µm^2
+        kappa:  Mmol / µm^2
+        m:      µm^2 / Mmol
+        b0:     unitless
+
+
+        Parameters
+        ----------
+        ob_readings     The observed bias readings
+        wound           A Wound class, which the observed bias is assumed to be generated from
+        priors          A list of distributions, one element per parameter, specifying the priors
+        t_units         The units which time is measured in, in the ob_readings dictionary keys
+        """
 
         super().__init__()
 
         self.wound = wound
 
-        # use the midpoints of the bins
-        self.ts = np.array([((t1 + t2) / (2 * 60), (r1 + r2) / 2) for (t1, t2), (r1, r2) in ts_bins])
-        self.TS = self.ts.shape[0]
-        self.r = self.ts[:, 1]
-        self.t = self.ts[:, 0]
+        assert t_units in ['seconds', 'minutes'], 't_units must be either "seconds" or "minutes" but it is {}'.format(t_units)
 
-        self.ob_dists = multivariate_normal(ob_readings.mean(0), ob_readings.var(0))
+        # the total number of readings
+        self.TS = len(ob_readings)
 
-        self.priors = [Normal(5 * 60, 4 * 60),          # q       Mmol / min
-                       Normal(400, 300),        # D 3e-12 m^2 / s   -> 200 µm^2 / min
-                       Normal(60, 16),                   # tau     s
-                       Normal(0.3, 0.2),                    # R_0     Mmol / m^2
-                       Normal(0.1, 0.2),                    # kappa   Mmol / m^2
-                       Normal(4, 4),                    # m      m^2 / mol
-                       Normal(0.001, 0.0005)]
+        # extract a list of rs, ts, mus and sigs
+        self.r = np.array([r for (r, t), (mu, sig) in ob_readings.items()])
+        self.t = np.array([t for (r, t), (mu, sig) in ob_readings.items()])
+        mus = np.array([mu for (r, t), (mu, sig) in ob_readings.items()])
+        sigs = np.array([sig for (r, t), (mu, sig) in ob_readings.items()])
+
+        # convert to minutes
+        if t_units is 'seconds':
+            self.t /= 60
+
+        # this is our multivariate Gaussian observed bias distribution
+        self.ob_dists = multivariate_normal(mus, sigs ** 2)
+
+        # these are the default priors
+        if priors is None:
+            self.priors = [Normal(5 * 60, 4 * 60),
+                           Normal(400, 300),
+                           Normal(60, 16),
+                           Normal(0.3, 0.2),
+                           Normal(0.1, 0.2),
+                           Normal(4, 4),
+                           Normal(0.001, 0.0005)]
+        else:
+            assert isinstance(priors, list)
+            assert len(priors) == 7
+            self.priors = priors
 
     def log_likelihood(self, params: np.ndarray):
         """

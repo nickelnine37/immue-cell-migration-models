@@ -76,7 +76,7 @@ class BP_Leukocyte(Leukocyte):
         sigmas = np.zeros((T, N))
         sigmas[bias_decisions] = self.b
         sigmas[~bias_decisions] = self.p
-        sigmas = - 2 * np.log(sigmas)
+        sigmas = (- 2 * np.log(sigmas)) ** 0.5
         sigmas[np.isinf(sigmas)] = 100
         steps = self.step.sample(size=T)
 

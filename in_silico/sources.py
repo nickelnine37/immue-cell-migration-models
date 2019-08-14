@@ -33,6 +33,7 @@ class Source:
             print('Units are already pixels')
         return self
 
+
 class PointSource(Source):
 
     def __init__(self, position: np.array=np.array([0, 0]), units='pixels'):
@@ -40,6 +41,7 @@ class PointSource(Source):
 
     def direction_to_source(self, coords: np.array):
         return self.position - coords
+
 
 class CircularSource(Source):
 
@@ -53,6 +55,7 @@ class CircularSource(Source):
         out[dists < self.radius] *= -1
         return out
 
+
 class Wound(PointSource):
 
     def __init__(self, position: np.array, units='microns'):
@@ -61,6 +64,7 @@ class Wound(PointSource):
     def concentration(self, params, r, t):
         raise NotImplementedError
 
+
 class PointWound(Wound):
 
     def __init__(self, position: np.array=np.array([0, 0])):
@@ -68,6 +72,7 @@ class PointWound(Wound):
 
     def concentration(self, params, r, t):
         return concentration(params, r, t)
+
 
 class MultiPointWound(Wound):
 
@@ -166,11 +171,13 @@ class MultiPointWound(Wound):
                 raise ValueError('If you want concentration at point r at all times t, t must be 1D')
 
         else:
-            raise ValueError('r and t must be numbers or numpy arrays, but they are {} and {} respectively'.format(type(r), type(t)))
+            raise TypeError('r and t must be numbers or numpy arrays, but they are {} and {} respectively'.format(type(r), type(t)))
 
-    def concentration_xy(self, params, x, y, t):
+    def concentration_xy(self, params: np.ndarray, x: Union[np.ndarray, Number], y: Union[np.ndarray, Number], t: Union[np.ndarray, Number]):
         """
-        Return the concentration of attractant at a point x-y at time t.
+        Return the concentration of attractant at a point x-y at time t. This function is essentially
+        a wrapper around the base concentration function that handles for all sorts of of inputs types
+        and shapes, as well as summing the effect of all the cells emitting attractant.
 
         Notes:
             * if a single point and single time is passed, a single concentration is returned
@@ -203,8 +210,7 @@ class MultiPointWound(Wound):
 
         # x and y must be the same type
         if type(x) != type(y):
-            raise ValueError(
-                'x and y must be the same type, but they are {} and {} respectively'.format(type(x), type(y)))
+            raise ValueError('x and y must be the same type, but they are {} and {} respectively'.format(type(x), type(y)))
 
         # we want the concentration at a single point xy at a single time t
         if isinstance(x, (float, int)) and isinstance(t, (float, int)):
@@ -225,8 +231,7 @@ class MultiPointWound(Wound):
 
             # x and y must have the same shape
             if x.shape != y.shape:
-                raise ValueError(
-                    'x and y must be the same shape, but they are {} and {} respectively'.format(x.shape, y.shape))
+                raise ValueError('x and y must be the same shape, but they are {} and {} respectively'.format(x.shape, y.shape))
 
             # assume we want C = [C(r1, t1), C(r2, t2) ... ]
             if x.shape == t.shape:
@@ -261,7 +266,8 @@ class MultiPointWound(Wound):
                 raise ValueError('If you want concentration at point r at all times t, t must be 1D')
 
         else:
-            raise ValueError('x, y and t must be numbers or numpy arrays')
+            raise TypeError('x/y and t must be numbers or numpy arrays but they have types {} and {} respectively'.format(type(x), type(t)))
+
 
 class CellsOnWoundMargin(MultiPointWound):
 
@@ -321,16 +327,18 @@ class CellsInsideWound(MultiPointWound):
 
 def concentration(params: np.ndarray, r: Union[np.ndarray, float], t: Union[np.array, float]) -> Union[np.ndarray, float]:
     """
-    This function returns the concentration of attractant at a
-    radial distance r and time t for a continuous point source
-    emitting attractand at a rate q from the origin from t=0
-    to t=tau with diffusion constant D.
+    This function returns the concentration of attractant at a radial distance r and
+    time t for a continuous point source emitting attractand at a rate q from the origin
+    from t=0 to t=τ with diffusion constant D. The equation governing this is:
+
+    A(r, t) = - q / 4πD  *  Ei(r^2 / 4Dt),                             if t < τ
+    A(r, t) =   q / 4πD  *  [ Ei(r^2 / 4D(t - τ)) - Ei(r^2 / 4Dt) ],   if t > τ
 
     Parameters
     ----------
     params  A numpy array containing q, D and tau
     r       the radial distance from the origin. Can be float or array
-    t       time
+    t       time: can be a float or array.
 
     Returns
     -------
@@ -340,27 +348,30 @@ def concentration(params: np.ndarray, r: Union[np.ndarray, float], t: Union[np.a
 
     q, D, tau = params[:3]
 
-    if isinstance(r, (Number, np.ndarray)) and isinstance(t, Number):
+    if not isinstance(r, (Number, np.ndarray)):
+        raise TypeError('r must be either a number or a numpy array, but it is {}'.format(type(r)))
+
+    factor = q / (4 * np.pi * D)
+
+    if isinstance(t, Number):
 
         if t < tau:
-            return - (q / (4 * np.pi * D)) * expi(- r ** 2 / (4 * D * t))
+            out = -expi(- r ** 2 / (4 * D * t))
         else:
-            return (q / (4 * np.pi * D)) * (expi(- r ** 2 / (4 * D * (t - tau))) - expi(- r ** 2 / (4 * D * t)))
+            out = expi(- r ** 2 / (4 * D * (t - tau))) - expi(- r ** 2 / (4 * D * t))
 
-    elif isinstance(r, (Number, np.ndarray)) and isinstance(t, np.ndarray):
+    elif isinstance(t, np.ndarray):
 
-        assert r.shape == t.shape, 'r and t must be the same shape, but they have shapes {} and {} respectively'.format(
-            r.shape, t.shape)
+        if isinstance(r, np.ndarray):
+            assert r.shape == t.shape, 'r and t must be the same shape, but they have shapes {} and {} respectively'.format(r.shape, t.shape)
 
         out = - expi(- r ** 2 / (4 * D * t))
         out[t > tau] += expi(- r[t > tau] ** 2 / (4 * D * (t[t > tau] - tau)))
 
-        return (q / (4 * np.pi * D)) * out
-
     else:
-        raise TypeError('r and t must both be floats/ints or numpy arrays')
+        raise TypeError('t must be either a number or a numpy array, but it is {}'.format(type(t)))
 
-
+    return factor * out
 
 
 

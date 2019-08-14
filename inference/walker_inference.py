@@ -10,7 +10,7 @@ from inference.base import MCMC
 from utils.checks import check_valid_prior, check_is_numpy
 from utils.misc import nan_concatenate
 
-def prepare_paths(paths: list, min_t: int=5) -> np.ndarray:
+def prepare_paths(paths: list, min_t: int=5, include_t=True) -> np.ndarray:
     """
     This function converts a list of paths, which come in the standard form, (each element is a (t, 3) array
     where column 0 has the frame index, column 1 has the x coordinates and column 2 has the y coordinates) into
@@ -52,7 +52,11 @@ def prepare_paths(paths: list, min_t: int=5) -> np.ndarray:
         return np.array([]).reshape(0, 2, 0)
 
     max_t = max(paths, key=lambda x: x.shape[0]).shape[0]
-    paths = [path[:, 1:] for path in paths if path.shape[0] >= min_t]
+    if include_t:
+        paths = [path[:, 1:] for path in paths if path.shape[0] >= min_t]
+    else:
+        paths = [path for path in paths if path.shape[0] >= min_t]
+
 
     paths_array = np.zeros((max_t, 2, len(paths)))
     paths_array[:] = np.nan
@@ -193,8 +197,8 @@ class BiasedPersistentInferer(MCMC):
 
         w, p, b = params
 
-        sig_b = -2 * np.log(b)
-        sig_p = -2 * np.log(p)
+        sig_b = (-2 * np.log(b)) ** 0.5
+        sig_p = (-2 * np.log(p)) ** 0.5
 
         # The probability of observing the first step, given the angle beta0 towards the source
         p_0 = WrappedNormal(mu=self.beta0, sig=sig_b).pdf(x=self.alpha0)

@@ -161,16 +161,20 @@ def plot_wpb_dist(params: np.array,
                   title: str=None,
                   add_kde: bool=False,
                   y_max: float=None,
-                  save_as: str=None):
+                  save_as: str=None,
+                  ax=None,
+                  legend=True):
 
     cols = {'w': '#1f77b4', 'p': '#ff7f0e', 'b': '#2ca02c'}
 
-    plt.figure()
+    if ax is None:
+        fig, ax = plt.subplots()
+
     stds = np.std(params, axis=0)
     means = np.mean(params, axis=0)
 
     for i, typ in enumerate(['w', 'p', 'b']):
-        plt.hist(params[:, i],
+        ax.hist(params[:, i],
                  label='${}$ = {:.2f} $\pm$ {:.2f}'.format(typ, means[i], stds[i]),
                  bins=100,
                  alpha=0.6,
@@ -182,11 +186,13 @@ def plot_wpb_dist(params: np.array,
         y_p = gaussian_kde(params[:, 1])
         y_b = gaussian_kde(params[:, 2])
         x = np.linspace(0, 1, 250)
-        plt.plot(x, y_w, color=cols['w'])
-        plt.plot(x, y_p, color=cols['p'])
-        plt.plot(x, y_b, color=cols['b'])
+        ax.plot(x, y_w, color=cols['w'])
+        ax.plot(x, y_p, color=cols['p'])
+        ax.plot(x, y_b, color=cols['b'])
 
-    plt.legend()
+    if legend:
+        plt.legend()
+
     plt.xlim(0, 1)
 
     if y_max is not None:

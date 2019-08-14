@@ -60,14 +60,14 @@ class ScipyDistribution(scipy.stats._distn_infrastructure.rv_frozen):
     def sample(self, size: Union[tuple, float]=None):
         return self.rvs(size)
 
-    def plot(self, ax=None, N=1001):
+    def plot(self, ax=None, N=1001, color=None):
 
         a, b = self.get_xlims()
         x = np.linspace(a, b, N)
         if ax is None:
-            plt.plot(x, self.pdf(x))
+            plt.plot(x, self.pdf(x), color=color)
         else:
-            ax.plot(x, self.pdf(x))
+            ax.plot(x, self.pdf(x), color=color)
 
     def get_xlims(self):
         raise NotImplementedError
