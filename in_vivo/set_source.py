@@ -1,5 +1,5 @@
 from matplotlib.patches import Circle
-import skimage
+from  skimage.io import imread
 import matplotlib.pyplot as plt
 import sys
 
@@ -8,6 +8,18 @@ from matplotlib.widgets import Button
 import argparse
 from in_silico.sources import PointSource
 import numpy as np
+
+'''
+USAGE:
+
+Run this file in a terminal as
+
+python set_source.py '/path/to/tif/file' <channel>
+
+This will cause a matplotlib pop up which will show an animation of the tif file, at the colour channel <channel>. 
+You can then click on the position where you think the wound source is. Once you've selected the right place
+click OK. This will print out the position of the wound and show you how to initialise a source object at that place. 
+'''
 
 
 
@@ -72,6 +84,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    frames = skimage.io.imread(args.tif_file[0])[:, args.color_channel[0], :, :]
+    frames = imread(args.tif_file[0])[:, args.color_channel[0], :, :]
     set_source(frames)
 

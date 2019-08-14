@@ -751,11 +751,11 @@ class CellTracker:
         self.paths = link_paths(find_paths(self.cells, **path_kwargs), **path_kwargs)
 
         # create a dataframe object and add columns for microns and time in seconds
-        cols = ['path', 'frame number', 'time (seconds)', 'x (pixels)', 'y (pixels)', 'x (microns)', 'y (microns)']
+        cols = ['TRACK_ID', 'FRAME', 'TIME', 'PIXELS_X', 'PIXELS_Y', 'POSITION_X', 'POSITION_Y']
         paths = [np.concatenate([path_no * np.ones((path.shape[0], 1)), path], axis=1) for path_no, path in enumerate(self.paths)]
-        self.dataframe = pd.DataFrame(np.concatenate(paths, axis=0), columns=['path', 'frame number', 'x (pixels)', 'y (pixels)'])
-        self.dataframe[['x (microns)', 'y (microns)']] = self.dataframe[['x (pixels)', 'y (pixels)']] * self.microns_per_pixel
-        self.dataframe['time (seconds)'] = self.dataframe['frame number'] * self.seconds_per_frame
+        self.dataframe = pd.DataFrame(np.concatenate(paths, axis=0), columns=['TRACK_ID', 'FRAME', 'PIXELS_X', 'PIXELS_Y'])
+        self.dataframe[['POSITION_X', 'POSITION_Y']] = self.dataframe[['PIXELS_X', 'PIXELS_Y']] * self.microns_per_pixel
+        self.dataframe['TIME'] = self.dataframe['FRAME'] * self.seconds_per_frame
         self.dataframe = self.dataframe[cols]
 
     def segment_paths(self, source: Source,
