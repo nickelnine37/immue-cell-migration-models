@@ -4,9 +4,8 @@ sys.path.append('..')
 import numpy as np
 from scipy.stats import multivariate_normal
 from utils.distributions import WrappedNormal, Uniform, Normal
-from inference.base import MCMC
+from inference.base_inference import inferer
 from typing import Union
-from scipy.special import expi
 from utils.exceptions import SquareRootError
 from in_silico.sources import Wound, PointWound, CellsInsideWound, CellsOnWoundMargin
 
@@ -15,18 +14,14 @@ dr = 15
 
 def complexes(params: np.ndarray, r: Union[np.ndarray, float], t: Union[np.array, float], wound: Wound) -> Union[np.ndarray, float]:
     """
-    This returns the concentration of bound complexes at radial
+    Given a set of AD parameters, this function returns the concentration of bound complexes at radial
     distance r and time t.
 
     Parameters
     ----------
+    params  A numpy array holding at least [tau, q, D, kappa, R_0] in that order
     r       the radial distance from the origin. Can be float or array
     t       time
-    tau     time attractant is released for
-    q       flow rate of attractant
-    D       diffusion constant
-    kappa   diffusivity constant
-    R_0     local receptor concentration
 
     Returns
     -------
@@ -65,13 +60,12 @@ def observed_bias(params: np.ndarray, r: Union[np.ndarray, float], t: Union[np.a
     return m * (complexes(params, r - dr, t, wound) - complexes(params, r + dr, t, wound)) + b_0
 
 
-
-class AttractantInference(MCMC):
+class AttractantInferer(inferer):
 
     def __init__(self, ob_readings: dict, wound: Wound, priors: list=None, t_units='minutes'):
         """
         Perform inference on observed bias readings to infer the posterior distribution over the
-        attractant dynamics parameters {q, D, τ, R0, kappa, m, b0}.
+        attractant dynamics parameters {q, D, τ, R0, κ, m, b0}.
 
         A dictionary specifying the observed bias readings must be provided, along with a certain
         instantiated wound (which can be a PointWound, a CellsOnWoundMargin or CellsInsideWound) .
@@ -81,8 +75,8 @@ class AttractantInference(MCMC):
         {(r1, t1): (mu1, sig1), (r2, t2): (mu2, sig2) ... }
 
         r and t specify the spatial and temporal location where the observed bias has been measured,
-        and mu and sig represent the mean and standard deviation of the posterior of the observed
-        bias at this location.
+        (this could be the mid-point of their respective bins), and mu and sig represent the mean and
+        standard deviation of the posterior of the observed bias at this location.
 
         DISTANCES SHOULD BE MEASURED IN MICRONS
 
@@ -117,10 +111,10 @@ class AttractantInference(MCMC):
         self.TS = len(ob_readings)
 
         # extract a list of rs, ts, mus and sigs
-        self.r = np.array([r for (r, t), (mu, sig) in ob_readings.items()])
-        self.t = np.array([t for (r, t), (mu, sig) in ob_readings.items()])
-        mus = np.array([mu for (r, t), (mu, sig) in ob_readings.items()])
-        sigs = np.array([sig for (r, t), (mu, sig) in ob_readings.items()])
+        self.r = np.array([r for r, t in ob_readings.keys()])
+        self.t = np.array([t for r, t in ob_readings.keys()])
+        mus = np.array([mu for mu, sig in ob_readings.values()])
+        sigs = np.array([sig for mu, sig in ob_readings.values()])
 
         # convert to minutes
         if t_units is 'seconds':
@@ -165,57 +159,50 @@ class AttractantInference(MCMC):
         return sum([prior.logpdf(param) for prior, param in zip(self.priors, params)])
 
 
-
-
 if __name__ == '__main__':
 
-    import time
-    import matplotlib.pyplot as plt
+    from plotting import plot_AD_param_dist
 
-    bins = [((0,    900),  (0, 25)), ((0,    900),  (25, 50)), ((0,    900),  (50, 100)), ((0,    900),  (100, 150)),
-            ((900,  1800), (0, 25)), ((900,  1800), (25, 50)), ((900,  1800), (50, 100)), ((900,  1800), (100, 150)),
-            ((1800, 2700), (0, 25)), ((1800, 2700), (25, 50)), ((1800, 2700), (50, 100)), ((1800, 2700), (100, 150)),
-            ((2700, 3600), (0, 25)), ((2700, 3600), (25, 50)), ((2700, 3600), (50, 100)), ((2700, 3600), (100, 150)),
-            ((3600, 5400), (0, 25)), ((3600, 5400), (25, 50)), ((3600, 5400), (50, 100)), ((3600, 5400), (100, 150)),
-            ((5400, 7200), (0, 25)), ((5400, 7200), (25, 50)), ((5400, 7200), (50, 100)), ((5400, 7200), (100, 150))]
+    # TEST
 
-    means = np.array([0.437128, 0.391095, 0.212341, 0.103723,
-                      0.269382, 0.286244, 0.203868, 0.127678,
-                      0.214605, 0.233463, 0.186637, 0.127907,
-                      0.185555, 0.201183, 0.171854, 0.124962,
-                      0.159903, 0.170442, 0.154173, 0.119456,
-                      0.003758, 0.008397, 0.015033, 0.022781])
+    # here are some example observed bias readings
+    ob_readings = {(25, 10): (0.1732, 0.02),
+                   (50, 10): (0.1541, 0.02),
+                   (75, 10): (0.1081, 0.02),
+                   (100, 10): (0.0647, 0.02),
+                   (125, 10): (0.0349, 0.02),
+                   (150, 10): (0.0174, 0.02),
+                   (25, 30): (0.1018, 0.02),
+                   (50, 30): (0.1007, 0.02),
+                   (75, 30): (0.0955, 0.02),
+                   (100, 30): (0.082, 0.02),
+                   (125, 30): (0.0659, 0.02),
+                   (150, 30): (0.0500, 0.02),
+                   (25, 50): (0.0077, 0.02),
+                   (50, 50): (0.0141, 0.02),
+                   (75, 50): (0.0196, 0.02),
+                   (100, 50): (0.0238, 0.02),
+                   (125, 50): (0.0263, 0.02),
+                   (150, 50): (0.0271, 0.02),
+                   (25, 80): (0.00309, 0.02),
+                   (50, 80): (0.00509, 0.02),
+                   (75, 80): (0.00693, 0.02),
+                   (100, 80): (0.0085, 0.02),
+                   (125, 80): (0.0098, 0.02),
+                   (150, 80): (0.0107, 0.02),
+                   (25, 120): (0.0018, 0.02),
+                   (50, 120): (0.0026, 0.02),
+                   (75, 120): (0.0034, 0.02),
+                   (100, 120): (0.004, 0.02),
+                   (125, 120): (0.004, 0.02),
+                   (150, 120): (0.005, 0.02)}
 
-    stds = np.array([0.04221,  0.013292, 0.00804,  0.019632,
-                     0.019825, 0.01067,  0.009917, 0.03512,
-                     0.049061, 0.010166, 0.011422, 0.064734,
-                     0.010487, 0.010171, 0.012229, 0.069327,
-                     0.027498, 0.033695, 0.011105, 0.030786,
-                     0.037766, 0.027568, 0.025019, 0.050603])
+    # make a new inferer and infer the distribution over underlying parameters
+    inferer = AttractantInferer(ob_readings, PointWound())
+    dist_out = inferer.multi_infer(n_walkers=5,
+                                   n_steps=300000,
+                                   burn_in=100000,
+                                   suppress_warnings=True)
 
-    wound = PointWound()
-
-    wbs = np.random.normal(loc=means, scale=stds, size=(20000, 24))
-    AD = AttractantInference(wbs, bins, wound)
-
-
-    init_params = np.array([AD.priors[i].mu for i in range(7)])
-
-    t0 = time.time()
-    ps = AD.infer(init_params, n_steps=500000, burn_in=500000, suppress_warnings=True)
-    t1 = time.time()
-
-    print('Inference completed in {:.2f}s'.format(t1 - t0))
-
-    fig, axes = plt.subplots(nrows=3, ncols=3)
-    axes = axes.reshape(-1)
-
-    for i, name in enumerate(['q', 'D', 'tau', 'R_0', 'kappa', 'm', 'b_0']):
-        axes[i].hist(ps[:, i], bins=100, density=True)
-        AD.priors[i].plot(axes[i])
-        axes[i].set_title(name)
-        axes[i].set_yticks([])
-
-    plt.tight_layout()
-    plt.show()
-
+    # plot the distribution
+    plot_AD_param_dist(dist_out, priors=inferer.priors)

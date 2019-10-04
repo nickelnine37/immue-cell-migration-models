@@ -6,7 +6,7 @@ from utils.angles import angle_between
 from in_silico.walkers import reference_axis
 from utils.distributions import WrappedNormal, Uniform
 from in_silico.sources import Source
-from inference.base import MCMC
+from inference.base_inference import inferer
 from utils.checks import check_valid_prior, check_is_numpy
 from utils.misc import nan_concatenate
 
@@ -95,7 +95,7 @@ def get_alphas_betas(paths_matrix: np.ndarray, source: Source):
     return alphas, betas
 
 
-class BiasedPersistentInferer(MCMC):
+class BiasedPersistentInferer(inferer):
 
     def __init__(self, paths: list, sources: list, priors: list=None):
         """
@@ -105,7 +105,7 @@ class BiasedPersistentInferer(MCMC):
 
         Parameters
         ----------
-        paths       a list of np.arrays of shape (T+1, 2, N).These are the paths of N
+        paths       a list of np.arrays of shape (T+1, 2, N). These are the paths of N
                     walkers walking for T timesteps. Not every path must be of the same
                     length, but the longest should be T+1. For every other path i, start
                     at index 0 and fill up to length t [:t, :, i] leaving [t:, :, i]
@@ -251,79 +251,29 @@ class BiasedPersistentInferer(MCMC):
         else:
             return sum([prior.logpdf(param) for prior, param in zip(self.priors, params)])
 
+
 if __name__ == '__main__':
 
     from in_silico.walkers import BP_Leukocyte
     from in_silico.sources import PointSource
-    from utils.plotting import plot_wpb_dist
-    from in_vivo.image_analysis import CellTracker
+    from plotting import plot_wpb_dist
 
-    if False:
-        source1 = PointSource(position=np.array([0, 0]))
-        walker1 = BP_Leukocyte(np.array([0.5, 0.7, 0.8]), source1)
-        paths1 = walker1.walk(np.random.uniform(-5, 5, size=(20, 2)), T=100)
+    # TEST
 
-        source2 = PointSource(position=np.array([3, 3]))
-        walker2 = BP_Leukocyte(np.array([0.5, 0.7, 0.8]), source2)
-        paths2 = walker2.walk(np.random.uniform(-5, 5, size=(20, 2)), T=80)
+    # set some parameters
+    w, p, b = 0.3, 0.5, 0.7
+    preset_params = np.array([w, p, b])
 
-        source3 = PointSource(position=np.array([-2, -3]))
-        walker3 = BP_Leukocyte(np.array([0.5, 0.7, 0.8]), source3)
-        paths3 = walker3.walk(np.random.uniform(-5, 5, size=(20, 2)), T=120)
+    # generate some paths wth these parameters, with two different sources
+    source1 = PointSource(position=(0, 0))
+    source2 = PointSource(position=(1.5, -1.5))
+    paths1 = BP_Leukocyte(params=preset_params, source=source1).walk(X0s=np.random.uniform(-5, 5, size=(20, 2)), T=100)
+    paths2 = BP_Leukocyte(params=preset_params, source=source2).walk(X0s=np.random.uniform(-5, 5, size=(20, 2)), T=100)
 
-        inferer = BiasedPersistentInfernce([paths1, paths2, paths3], [source1, source2, source3])
-        out = inferer.multi_infer(init_params=np.random.uniform(0, 1, size=(5, 3)), n_steps=10000, burn_in=3000, suppress_warnings=True)
-
-        plot_wpb_dist(out)
-
-    if True:
-
-        # from in_vivo.set_source import set_source
-        # from skimage.io import imread
-        # from in_vivo.image_analysis import detect_all_cells, find_paths, paths_to_array, link_paths
-
-        my_csvs = ['/home/ed/Documents/Academic/Edinburgh/Courses/Dissertation/LeukocyteMigration/in_vivo/2 hour wound 1 Spots in tracks statistics.csv',
-                   '/home/ed/Documents/Academic/Edinburgh/Courses/Dissertation/LeukocyteMigration/in_vivo/2 hour wound 2 Spots in tracks statistics.csv',
-                   '/home/ed/Documents/Academic/Edinburgh/Courses/Dissertation/LeukocyteMigration/in_vivo/2 hour wound 3 Spots in tracks statistics.csv',
-                   '/home/ed/Documents/Academic/Edinburgh/Courses/Dissertation/LeukocyteMigration/in_vivo/control 1 hour wound Spots in tracks statistics.csv']
-
-        their_csvs = ['/home/ed/Documents/Academic/Edinburgh/Courses/Dissertation/LeukocyteMigration/in_vivo/MAX 15.12.18 ubi ecadGFPsrpGFP srp3xmch x white.mvd2.csv',
-                      '/home/ed/Documents/Academic/Edinburgh/Courses/Dissertation/LeukocyteMigration/in_vivo/MAX_15.12.18 ubi ecadGFPsrpGFP srp3xmch x white.mvd2 2.csv',
-                      '/home/ed/Documents/Academic/Edinburgh/Courses/Dissertation/LeukocyteMigration/in_vivo/MAX_15.12.18 ubi ecadGFPsrpGFP srp3xmch x white.mvd2 3.csv',
-                      '/home/ed/Documents/Academic/Edinburgh/Courses/Dissertation/LeukocyteMigration/in_vivo/Pupae 1 concatenated ubi-ecad-GFP, srpGFP; srp-3xH2Amch x white-1HR.csv']
-
-        tif_files = ['/media/ed/DATA/Datasets/Leukocytes/control wounded 2hr/Wound 1/MAX 15.12.18 ubi ecadGFPsrpGFP srp3xmch x white.mvd2.tif',
-                     '/media/ed/DATA/Datasets/Leukocytes/control wounded 2hr/Wound 2/MAX_15.12.18 ubi ecadGFPsrpGFP srp3xmch x white.mvd2 2.tif',
-                     '/media/ed/DATA/Datasets/Leukocytes/control wounded 2hr/Wound 3/MAX_15.12.18 ubi ecadGFPsrpGFP srp3xmch x white.mvd2 3.tif',
-                     '/media/ed/DATA/Datasets/Leukocytes/Control wounded 1hr/Pupae 1 concatenated ubi-ecad-GFP, srpGFP; srp-3xH2Amch x white-1HR.tif']
-
-        channels = [1, 1, 1, 0]
-        # for tif, c in zip(tif_files, channels):
-        #     frames = imread(tif)[:, c, :, :]
-        #     set_source(frames)
-
-        sources = [PointSource(position=np.array([431.24, 387.06])),
-                   PointSource(position=np.array([312.85, 437.80])),
-                   PointSource(position=np.array([404.66, 449.88])),
-                   PointSource(position=np.array([382.91, 365.32]))]
-
-        tracker = CellTracker(tif_file=tif_files, color_channel=channels)
-        tracker.compute_paths(step_size=10, detector='DoG')
-        segmented_paths = tracker.segment_paths(source=sources)
-
-        bins = list(segmented_paths.keys())
-
-        for bin in bins:
-
-            inferer = BiasedPersistentInfernce(*segmented_paths[bin])
-            out = inferer.multi_infer(init_params=np.random.uniform(0, 1, size=(5, 3)), n_steps=10000, burn_in=3000, suppress_warnings=True)
-            plot_wpb_dist(out, title=str(bin))
-
-        # for tif, source, c in zip(tif_files, sources, channels):
-        #
-        #     frames = imread(tif)[:, c, :, :]
-        #     T, Y, X = frames.shape
-        #     cells = detect_all_cells(frames)
-        #     paths = find_paths(cells, X, Y)
-        #     array = paths_to_array(paths)
-
+    # run the inference
+    inferer = BiasedPersistentInferer(paths=[paths1, paths2], sources=[source1, source2])
+    dist_out = inferer.multi_infer(n_walkers=5,
+                                   n_steps=10000,
+                                   burn_in=3000)
+    # plot the paths
+    plot_wpb_dist(dist_out)

@@ -17,5 +17,11 @@ Jupyter version:    4.4.0
 
 but *should* work with python 3 and any other set of compatible package versions. 
 
+In addition, in order to input mp4 files, the module `ffmpeg-python` is needed. This can be installed by running 
+
+```
+pip install ffmpeg-python
+```
+
 Start in the Notebooks folder!
 

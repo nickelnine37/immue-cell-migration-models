@@ -2,8 +2,10 @@ from matplotlib.patches import Circle
 from  skimage.io import imread
 import matplotlib.pyplot as plt
 import sys
+import os
 
-sys.path.append('..')
+sys.path.append(os.path.split(os.path.dirname(__file__))[0])
+print(sys.path)
 from matplotlib.widgets import Button
 import argparse
 from in_silico.sources import PointSource
@@ -79,7 +81,7 @@ def set_source(frames):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Set the source position')
-    parser.add_argument('tif_file', type=str, nargs=1, help='load a tif file')
+    parser.add_argument('video_file', type=str, nargs=1, help='load a tif file')
     parser.add_argument('color_channel', type=int, nargs=1, help='load a tif file', default=1)
 
     args = parser.parse_args()

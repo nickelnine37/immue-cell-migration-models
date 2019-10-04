@@ -3,7 +3,6 @@ import time
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from typing import Union
 from numbers import Number
 from skimage.io import imread
 from skimage.feature import blob_log, blob_dog
@@ -14,9 +13,7 @@ from scipy.optimize import linear_sum_assignment
 from utils.exceptions import ArgumentError
 from utils.distributions import TruncatedNormal
 from utils.plotting import make_gif
-from utils.misc import nan_concatenate
 from in_silico.sources import Source
-from utils.checks import assert_same_length
 
 
 def detect_cells(image: np.ndarray, detector: str='LoG', min_sigma: int=3, max_sigma: int=10,
@@ -644,7 +641,7 @@ class CellTracker:
     of all the cell tracjectories within that tif file.
     """
 
-    def __init__(self, tif_file: str,
+    def __init__(self, video_file: str,
                  seconds_per_frame: float=30,
                  microns_per_pixel: float=0.269,
                  color_channel: int=0):
@@ -653,7 +650,7 @@ class CellTracker:
 
         Parameters
         ----------
-        tif_file            A string with the path to the tif file.
+        video_file          A string with the path to the tif or mp4 file.
 
         seconds_per_frame   The number of seconds that each frame of the input files lasts.
                             If this is the same for all input files, pass a single float/int.
@@ -670,9 +667,23 @@ class CellTracker:
 
 
         # read in the tif file
-        self.file_path = tif_file
-        self.frames = imread(tif_file)[:, color_channel, :, :]
-        self.T, self.Y, self.X = self.frames.shape
+        self.file_path = video_file
+
+        # if we have a tif file ...
+        if video_file[-3:] == 'tif':
+            self.frames = imread(video_file)[:, color_channel, :, :]
+            self.T, self.Y, self.X = self.frames.shape
+
+        # if we have an mp4 file
+        if video_file[-3:] == 'mp4':
+
+            import ffmpeg
+
+            probe = ffmpeg.probe(video_file)
+            info = [x for x in probe['streams'] if x['codec_type'] == 'video'][0]
+            self.T, self.Y, self.X = [int(info[info_type]) for info_type in ['nb_frames', 'height', 'width']]
+            out, _ = ffmpeg.input(video_file).output('pipe:', format='rawvideo', pix_fmt='rgb24').run(capture_stdout=True)
+            self.frames = np.frombuffer(out, np.uint8).reshape((-1, self.Y, self.X, 3))[:, :, :, color_channel]
 
         # check the unit conversion arguments
         if not isinstance(seconds_per_frame, Number):
@@ -823,20 +834,14 @@ class CellTracker:
         make_gif(self.frames, save_as=save_as, delay=delay, dpi=dpi, paths=self.paths)
 
 
-
-
 if __name__ == '__main__':
 
 
-    tif_files = ['/media/ed/DATA/Datasets/Leukocytes/control wounded 2hr/Wound 3/MAX_15.12.18 ubi ecadGFPsrpGFP srp3xmch x white.mvd2 3.tif',
-                 '/media/ed/DATA/Datasets/Leukocytes/control wounded 2hr/Wound 2/MAX_15.12.18 ubi ecadGFPsrpGFP srp3xmch x white.mvd2 2.tif',
-                 '/media/ed/DATA/Datasets/Leukocytes/control wounded 2hr/Wound 1/MAX 15.12.18 ubi ecadGFPsrpGFP srp3xmch x white.mvd2.tif',
-                 '/media/ed/DATA/Datasets/Leukocytes/Control wounded 1hr/Pupae 1 concatenated ubi-ecad-GFP, srpGFP; srp-3xH2Amch x white-1HR.tif']
+    tif_file = '/media/ed/DATA/Datasets/Leukocytes/Control wounded 1hr/Pupae 1 concatenated ubi-ecad-GFP, srpGFP; srp-3xH2Amch x white-1HR.tif'
+    mp4_file = '/home/ed/Documents/Academic/Edinburgh/Courses/Dissertation/Prototype Notebooks/example.mp4'
 
-
-    tracker = CellTracker(tif_files, color_channel=[1, 1, 1, 0])
-    # tracker.segment_paths(source=None, from_csv=[os.path.split(file)[-1][:-4] + '.csv' for file in tif_files])
-    tracker.compute_paths(detector='LoG')
+    tracker = CellTracker(mp4_file, color_channel=0)
+    tracker.compute_paths(detector='DoG')
     tracker.to_csv()
 
 

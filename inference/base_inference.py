@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 from utils.parallel import parallel_methods
 
-class MCMC:
+class inferer:
 
     def __init__(self, *args, **kwargs):
         self.priors = None
