@@ -1,5 +1,6 @@
 import sys
-sys.path.append('..')
+import os
+sys.path.append(os.path.abspath('..'))
 
 import numpy as np
 from scipy.stats import multivariate_normal
@@ -161,7 +162,7 @@ class AttractantInferer(inferer):
 
 if __name__ == '__main__':
 
-    from plotting import plot_AD_param_dist
+    from utils.plotting import plot_AD_param_dist
 
     # TEST
 

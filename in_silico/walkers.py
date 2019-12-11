@@ -1,4 +1,7 @@
 import numpy as np
+import sys
+import os
+sys.path.append(os.path.abspath('..'))
 from in_silico.sources import Source
 from utils.distributions import Bernoulli, WrappedNormal, TruncatedNormal
 from utils.angles import angle_between
@@ -109,6 +112,6 @@ if __name__ == '__main__':
     paths = B.walk(X0s=np.random.uniform(-5, 5, size=(N, 2)), T=100)
     t2 = time.time()
 
-    from plotting import plot_paths
+    from utils.plotting import plot_paths
 
     plot_paths(paths, PointSource(np.array([3, 3])))

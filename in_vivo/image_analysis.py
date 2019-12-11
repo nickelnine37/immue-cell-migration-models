@@ -1,4 +1,6 @@
+import sys
 import os
+sys.path.append(os.path.abspath('..'))
 import time
 import numpy as np
 import pandas as pd
@@ -316,137 +318,6 @@ def find_paths(cells: dict, box_x: int, box_y: int, step_size: float=10,
     return paths
 
 
-# def link_paths(paths: list, box_x: int, box_y: int, step_size: float=10,
-#                d: float=None, b: float=None) -> list:
-#
-#     time.sleep(0.1)
-#     print('Running LAP to link broken trajectories')
-#     t0 = time.time()
-#
-#     # find all the places where paths start and stop mid-movie
-#     # make a list including the path ID, the frame at which it stops/starts
-#     # and the cell coordinates at that time
-#     final_frame = np.concatenate(paths)[:, 0].max()
-#     starts = [(path_id, path[0, 0], path[0, 1], path[0, 2]) for path_id, path in enumerate(paths) if path[0, 0] != 0]
-#     stops = [(path_id, path[-1, 0], path[-1, 1], path[-1, 2]) for path_id, path in enumerate(paths) if path[-1, 0] != final_frame]
-#
-#     n_stops = len(stops)
-#     n_starts = len(starts)
-#
-#     stops = np.array(stops)
-#     starts = np.array(starts)
-#
-#     # isolate the stop/start IDs and stop/start times
-#     stop_ids, start_ids = stops[:, 0], starts[:, 0]
-#     stop_times, start_times = stops[:, 1][:, None], starts[:, 1][:, None]
-#
-#     # same for stop/start coordinates
-#     stop_coords = stops[:, 2:]
-#     start_coords = starts[:, 2:]
-#
-#     # make a matrix where element ij is the time difference in frames between the ith stop and jth start
-#     t_dists = cdist(stop_times, start_times, metric=lambda stop, start: start - stop)
-#
-#     # the same, but the euclidean distance between the coordinates of the ith stop and jth start
-#     s_dists = cdist(stop_coords, start_coords)
-#
-#     # the same again, but include a tuple (pathID[i], pathID[j])
-#     path_transitions = [[(stop_id, start_id) for start_id in start_ids] for stop_id in stop_ids]
-#
-#     # make a matrix of pdf values at the separations. Note scaling by sqrt(t)
-#     with np.errstate(divide='ignore', invalid='ignore'):
-#         pdf_matrix = TruncatedNormal(sig=step_size * t_dists ** 0.5).pdf(s_dists)
-#
-#     # this accounts for entries that have negative time separations (can't go back in time...)
-#     pdf_matrix[np.isnan(pdf_matrix)] = 0
-#
-#     # start building the cost matrix
-#     matrix = np.ones((n_stops + n_starts, n_stops + n_starts))
-#     matrix[:n_stops, :n_starts] = pdf_matrix
-#     matrix[n_stops:, n_starts:] = pdf_matrix.T
-#
-#     d_to_closest_edge = np.array([stop_coords[:, 0], box_x - stop_coords[:, 0], stop_coords[:, 1], box_y - stop_coords[:, 1]]).min(0)[:, None]
-#     d_from_closest_edge = np.array([start_coords[:, 0], box_x - start_coords[:, 0], start_coords[:, 1], box_y - start_coords[:, 1]]).min(0)[None, :]
-#
-#     # convert from probabilities to pdf values
-#     step_distribution = TruncatedNormal(sig=step_size)
-#
-#     if d is None:
-#         d = step_distribution.pdf(2 * step_size)
-#     if b is None:
-#         b = step_distribution.pdf(2 * step_size)
-#
-#     # add upper right and lower left quadrants to cost matrix
-#     matrix[:n_stops, n_starts:] = np.eye(n_stops) * (step_distribution.pdf(d_to_closest_edge) + d)
-#     matrix[n_stops:, :n_starts] = np.eye(n_starts) * (step_distribution.pdf(d_from_closest_edge) + b)
-#
-#
-#     # convert it into a proper cost matrix (sums, not products)
-#     with np.errstate(divide='ignore'):
-#         cost_matrix = - np.log(matrix)
-#
-#     cost_matrix[cost_matrix == np.inf] = 1e9
-#
-#     if cost_matrix.shape[0] > 800:
-#         print('WARNING: VERY LARGE COST MATRIX: {}. ESTIMATED COMPUTE TIME: {:.0f}s'.format(cost_matrix.shape, 8.5e-11 * cost_matrix.shape[0] ** 4))
-#
-#     # solve assignment problem
-#
-#     row_ind, col_ind = linear_sum_assignment(cost_matrix)
-#
-#     # interpret the output into more understandable format
-#     transitions = []
-#     for stop_cell_no, start_cell_no in zip(row_ind, col_ind):
-#
-#         if start_cell_no >= n_starts and stop_cell_no >= n_stops:
-#             # lower right quadrant: nothing interesting
-#             pass
-#
-#         elif start_cell_no >= n_starts:
-#             # upper right quadrant: id1 disappeared after frame t: end of a path
-#             transitions.append((stop_cell_no, 'END'))
-#
-#         elif stop_cell_no >= n_stops:
-#             # lower left quadrant: id2 appeared in frame t+1: start of a new path
-#             transitions.append(('START', start_cell_no))
-#
-#         else:
-#             # upper left quadrant: regular transition
-#             transitions.append((stop_cell_no, start_cell_no))
-#
-#     # now link between path IDs
-#     path_links = []
-#     for stop, start in transitions:
-#         if stop != 'START' and start != 'END':
-#             path_links.append(path_transitions[stop][start])
-#
-#     # get a list of all path IDs that are used in transitions
-#     linked_paths = []
-#     for path1, path2 in path_links:
-#         linked_paths.append(path1)
-#         linked_paths.append(path2)
-#     linked_paths = set(linked_paths)
-#
-#     # begin a new list of paths, first with all the paths that aren't included in the links
-#     new_paths = [[path] for i, path in enumerate(paths) if i not in linked_paths]
-#
-#     # link together the paths and add them to the new paths list
-#     for start in np.array(path_links)[:, 0]:
-#         path = []
-#         while True:
-#             for link in path_links:
-#                 if link[0] == start:
-#                     path.append(paths[int(start)])
-#                     start = link[1]
-#                     continue
-#             path.append(paths[int(start)])
-#             break
-#         new_paths.append(path)
-#
-#     print('Linked {} broken trajectories in {:.2f}s'.format(len(path_links), time.time() - t0))
-#
-#     return [np.concatenate(sub_paths, axis=0) for sub_paths in new_paths]
-
 def link_paths(paths: list, box_x: int, box_y: int, step_size: float=10,
                d: float=None, b: float=None) -> list:
 
@@ -723,7 +594,7 @@ class CellTracker:
                                       array, where the first column holds the frame number,
                                       and the other columns are the x-y coordinates of that cell.
 
-        CellTracker.dataframes:       Each element is a pandas DataFrame, with columns ['path',
+        CellTracker.dataframe:       Each element is a pandas DataFrame, with columns ['path',
                                       'frame number', 'time (seconds)', 'x (pixels)', 'y (pixels)',
                                       'x (microns)', 'y (microns)']
 
@@ -837,16 +708,9 @@ class CellTracker:
 if __name__ == '__main__':
 
 
-    tif_file = '/media/ed/DATA/Datasets/Leukocytes/Control wounded 1hr/Pupae 1 concatenated ubi-ecad-GFP, srpGFP; srp-3xH2Amch x white-1HR.tif'
-    mp4_file = '/home/ed/Documents/Academic/Edinburgh/Courses/Dissertation/Prototype Notebooks/example.mp4'
+    tif_file = '/Users/linus/Dropbox/projects/cellMigration/Wood/woundMigration/Control wounded 1hr/Pupae 1 concatenated ubi-ecad-GFP, srpGFP; srp-3xH2Amch x white-1HR.tif'
+    mp4_file = '/Users/linus/Dropbox/projects/cellMigration/Feng/ImmuneCellMigrationAnalysis/trackingtest.mp4'
 
     tracker = CellTracker(mp4_file, color_channel=0)
     tracker.compute_paths(detector='DoG')
     tracker.to_csv()
-
-
-
-
-
-
-

@@ -1,5 +1,6 @@
 import sys
-sys.path.append('/home/ed/Documents/Academic/Edinburgh/Courses/Dissertation/LeukocyteMigration/')
+import os
+sys.path.append(os.path.abspath('..'))
 
 import numpy as np
 from utils.angles import angle_between
@@ -256,7 +257,7 @@ if __name__ == '__main__':
 
     from in_silico.walkers import BP_Leukocyte
     from in_silico.sources import PointSource
-    from plotting import plot_wpb_dist
+    from utils.plotting import plot_wpb_dist
 
     # TEST
 
