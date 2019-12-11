@@ -709,8 +709,7 @@ if __name__ == '__main__':
 
 
     tif_file = '/Users/linus/Dropbox/projects/cellMigration/Wood/woundMigration/Control wounded 1hr/Pupae 1 concatenated ubi-ecad-GFP, srpGFP; srp-3xH2Amch x white-1HR.tif'
-    mp4_file = '/Users/linus/Dropbox/projects/cellMigration/Feng/ImmuneCellMigrationAnalysis/trackingtest.mp4'
 
-    tracker = CellTracker(mp4_file, color_channel=0)
+    tracker = CellTracker(tif_file, color_channel=0)
     tracker.compute_paths(detector='DoG')
     tracker.to_csv()
