@@ -53,6 +53,7 @@ class inferer:
 
         # initialise the step size to be 1/20 of the std of the priors
         step = [prior.std() / 20 for prior in self.priors]
+        step_factor = 1 # for adapting step size towards optimal acceptance ratio
         total_accepts = 0
         rolling_accepts = 0
         rolling_rejects = 0
@@ -94,11 +95,15 @@ class inferer:
             # append the params regardless of whether the step was accepted or not
             params_out[i, :] = params
 
-            # adapt the guassian kernel width to be 1/3 the standard deviation of previous steps
+            # adapt the gaussian kernel width to be 1/3 the standard deviation of previous steps
             if i % check_every == check_every - 1:
-                step = np.array(params_out)[:i, ].std(0) / 3
+                ar, rar = total_accepts / i, rolling_accepts / check_every
+
+                # drive acceptance rate towards 0.234, as per Roberts, G.O., Gelman, A., Gilks, W.R. (1997). Weak Convergence and Optimal Scalingof Random Walk Metropolis Algorithms.Ann. Appl. Probab.7, 110-20. Though note there's been some debate since e.g.  http://probability.ca/jeff/ftpdir/mylene2.pdf
+                step_factor += (ar - 0.234)
+                step = step_factor * np.array(params_out)[:i, ].std(0) / 3
+
                 if use_tqdm:
-                    ar, rar = total_accepts / i, rolling_accepts / check_every
                     pbar.set_description('Total acceptance Rate: {:.3f}. Rolling acceptance rate: {:.3f}'.format(ar, rar))
                 rolling_accepts = 0
 
