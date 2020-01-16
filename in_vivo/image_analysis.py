@@ -239,7 +239,7 @@ def find_transitions(cells1: np.ndarray, cells2: np.ndarray, box_x: int, box_y: 
 def find_paths(cells: dict, box_x: int, box_y: int, step_size: float=10,
                d: float=None, b: float=None) -> list:
     """
-    Given a disctionary which contains numpy arrays, indexed by frame number t, which represent
+    Given a dictionary which contains numpy arrays, indexed by frame number t, which represent
     the x-y-r coordinates of the cells detected in each of T frames, find all the paths that
     link them together.
 

@@ -207,8 +207,6 @@ def plot_wpb_dist(params: np.array,
 
     plt.show()
 
-
-
 def set_source():
 
     import skimage
