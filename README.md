@@ -17,5 +17,11 @@ docker build -t diss .
 docker run -p 8888:8888 diss
 ```
 
-This may take around 5 minutes and use up ~1.5GB of space. 
+This may take around 5 minutes and use up ~1.5GB of space. To reduce space and increase build time, remove the following line in the dockerfile
+
+```
+RUN apt update && apt install -y ffmpeg
+```
+
+This will remove the ability to create mp4 videos in notebook 4, but all other functionality will remain. 
 
