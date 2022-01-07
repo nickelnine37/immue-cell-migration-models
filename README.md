@@ -4,7 +4,7 @@ This is a repository holding the code relevant for my masters dissertation at Ed
 
 
 
-
+![](src/data/images/intro.png)
 
 ## Instructions for running with docker
 
@@ -14,7 +14,7 @@ To explore this project via the code in the notebooks folder run the following:
 git clone https://github.com/nickelnine37/immue-cell-migration-models.git
 cd immue-cell-migration-models
 docker build -t diss .
-docker run -p 8888:8888
+docker run -p 8888:8888 diss
 ```
 
 This may take around 5 minutes and use up ~1.5GB of space. 
