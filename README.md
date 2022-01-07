@@ -1,27 +1,20 @@
-# Drosophila Wound Analysis
+# immue-cell-migration-models
 
-The repository holds all the code for my dissertation *A Cell-Tracking Tool for Analysing Cell Behaviour During Wound Repair*. 
+This is a repository holding the code relevant for my masters dissertation at Edinburgh University entitled "A Cell-Tracking Tool for Analysing Cell Behaviour During Wound Repair". The purpose is to use in-vivo images of white blood cells migrating towards a wound in the wing of a fruit fly, and to build a model for this motion with the aim of inferring infomation about the chemical environment. 
 
-The requirements for this project are Numpy, Pandas, Scipy, Matplotlib, Skimage, tqdm and Jupyter. It has been tested with the following versions:
 
-```
-Python version:     3.7.3
-Numpy version:      1.16.4
-Matplotlib version: 3.0.3
-Pandas version:     0.24.2
-Skimage version:    0.15.0
-Scipy version:      1.2.1
-tqdm version:       4.32.1
-Jupyter version:    4.4.0
-```
 
-but *should* work with python 3 and any other set of compatible package versions. 
 
-In addition, in order to input mp4 files, the module `ffmpeg-python` is needed. This can be installed by running 
+
+## Instructions for running with docker
+
+To explore this project via the code in the notebooks folder run the following: 
 
 ```
-pip install ffmpeg-python
+git clone 
+cd 
+docker build -t diss .
+docker run -p 8888:8888
 ```
 
-Start in the Notebooks folder!
-
+This may take around 5 minutes and use up ~1.5GB of space. 
